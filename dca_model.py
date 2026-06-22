@@ -54,9 +54,9 @@ class DCABlock(Module):
     Couples Global (Latent Attention) and Local (GraphSAGE) information, 
     followed by a non-linear FFN to enable deep architectural stacking.
     """
-    def __init__(self, hidden_channels, beta=0.85, num_heads=4, dropout=0.1):
+    def __init__(self, hidden_channels, lmbda=0.85, num_heads=4, dropout=0.1):
         super().__init__()
-        self.beta = beta
+        self.lmbda = lmbda
         self.norm = LayerNorm(hidden_channels)
         
         # Parallel attention branches
@@ -75,9 +75,9 @@ class DCABlock(Module):
     def forward(self, x, edge_index, w_global, w_local):
         h = self.norm(x)
         
-        # Global Branch with residual beta
+        # Global Branch with residual lmbda
         z_global_raw = self.attn_net(h)
-        z_global = self.beta * z_global_raw + (1 - self.beta) * h 
+        z_global = self.lmbda * z_global_raw + (1 - self.lmbda) * h 
         
         # Local Branch (1-hop neighborhood)
         z_local = F.relu(self.local_gnn(h, edge_index))
@@ -120,7 +120,7 @@ class DeepCoupledAttention(Module):
         hidden_channels (int): Latent dimension size.
         out_channels (int): Number of target properties to predict.
         num_blocks (int): Number of stacked DCA blocks (depth).
-        beta (float): Residual weight for the global attention branch.
+        lmbda (float): Residual weight for the global attention branch.
         alpha (float): Initial or fixed weight for local attention (w_local).
                        w_global will be (1 - alpha).
         learnable_alpha (bool): If True, alpha becomes a learnable parameter
@@ -128,7 +128,7 @@ class DeepCoupledAttention(Module):
         dropout (float): Dropout probability.
     """
     def __init__(self, in_channels, hidden_channels, out_channels, 
-                 num_blocks=6, beta=0.85, alpha=0.5, learnable_alpha=False, dropout=0.1):
+                 num_blocks=6, lmbda=0.85, alpha=0.5, learnable_alpha=False, dropout=0.1):
         super().__init__()
         self.input_proj = Linear(in_channels, hidden_channels)
         self.learnable_alpha = learnable_alpha
@@ -141,7 +141,7 @@ class DeepCoupledAttention(Module):
             self.alpha_fixed = alpha
             
         self.blocks = ModuleList([
-            DCABlock(hidden_channels, beta=beta, num_heads=4, dropout=dropout) 
+            DCABlock(hidden_channels, lmbda=lmbda, num_heads=4, dropout=dropout) 
             for _ in range(num_blocks)
         ])
         

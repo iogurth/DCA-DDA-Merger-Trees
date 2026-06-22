@@ -86,11 +86,11 @@ class DDAGlobalBlock(Module):
     """
     Global processing block for the DDA architecture.
     Applies Latent Global Attention across the entire graph, governed by the 
-    residual weight 'beta', followed by an FFN.
+    residual weight 'lmbda', followed by an FFN.
     """
-    def __init__(self, hidden_channels, beta=0.85, num_heads=4, dropout=0.1):
+    def __init__(self, hidden_channels, lmbda=0.85, num_heads=4, dropout=0.1):
         super().__init__()
-        self.beta = beta
+        self.lmbda = lmbda
         
         self.norm1 = LayerNorm(hidden_channels)
         self.global_attn = LatentGlobalAttention(hidden_channels, hidden_channels, num_heads)
@@ -105,10 +105,10 @@ class DDAGlobalBlock(Module):
         self.dropout = Dropout(dropout)
 
     def forward(self, x):
-        # Attention sub-block with Beta-controlled residual
+        # Attention sub-block with lambda-controlled residual
         h = self.norm1(x)
         z = self.global_attn(h)
-        x = (1 - self.beta) * x + self.beta * self.dropout(z)
+        x = (1 - self.lmbda) * x + self.lmbda * self.dropout(z)
         
         # FFN sub-block with direct residual
         h_ffn = self.norm2(x)
@@ -150,11 +150,11 @@ class DeepDecoupledAttention(Module):
         num_pairs (int): Number of alternating Local-Global block pairs.
                          (e.g., num_pairs=6 creates 12 blocks total).
         alpha (float): Residual weight for the local branch.
-        beta (float): Residual weight for the global branch.
+        lmbda (float): Residual weight for the global branch.
         dropout (float): Dropout probability.
     """
     def __init__(self, in_channels, hidden_channels, out_channels, 
-                 num_pairs=6, alpha=0.85, beta=0.85, dropout=0.1):
+                 num_pairs=6, alpha=0.85, lmbda=0.85, dropout=0.1):
         super().__init__()
         self.input_proj = Linear(in_channels, hidden_channels)
         
@@ -162,7 +162,7 @@ class DeepDecoupledAttention(Module):
         layers = []
         for _ in range(num_pairs):
             layers.append(DDALocalBlock(hidden_channels, alpha=alpha, dropout=dropout))
-            layers.append(DDAGlobalBlock(hidden_channels, beta=beta, num_heads=4, dropout=dropout))
+            layers.append(DDAGlobalBlock(hidden_channels, lmbda=lmbda, num_heads=4, dropout=dropout))
         
         self.blocks = ModuleList(layers)
         
@@ -212,7 +212,7 @@ if __name__ == "__main__":
        out_channels=7, 
        num_pairs=6, 
        alpha=0.85, 
-       beta=0.85
+       lmbda=0.85
     )
    
     # Load pre-trained weights
